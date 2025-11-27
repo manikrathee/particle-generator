@@ -2,6 +2,15 @@ export function setupUI(particleSystem, onExportVideo) {
     const container = document.createElement('div');
     container.id = 'ui-container';
 
+    const title = document.createElement('h3');
+    title.textContent = 'Particle Generator';
+    title.style.margin = '0 0 20px 0';
+    title.style.fontSize = '14px';
+    title.style.fontWeight = '600';
+    title.style.letterSpacing = '0.02em';
+    title.style.color = '#fff';
+    container.appendChild(title);
+
     const createControl = (label, type, key, min, max, step, value) => {
         const group = document.createElement('div');
         group.className = 'control-group';

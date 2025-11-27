@@ -27,9 +27,9 @@ const renderScene = new RenderPass(scene, camera);
 
 const bloomPass = new UnrealBloomPass(
   new THREE.Vector2(window.innerWidth, window.innerHeight),
-  1.5, // strength
-  0.4, // radius
-  0.85 // threshold
+  1.2, // strength (slightly lower)
+  0.3, // radius (tighter)
+  0.2  // threshold (lower to catch more particles but keep background dark)
 );
 
 const composer = new EffectComposer(renderer);
@@ -93,6 +93,56 @@ const stopExport = () => {
 
 // --- UI ---
 setupUI(particleSystem, startExport);
+
+// --- Interaction ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+const plane = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0); // Plane at z=0
+const planeIntersectPoint = new THREE.Vector3();
+
+const updateMouse = (event) => {
+  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  raycaster.ray.intersectPlane(plane, planeIntersectPoint);
+
+  particleSystem.setMousePosition(planeIntersectPoint.x, planeIntersectPoint.y, planeIntersectPoint.z);
+};
+
+window.addEventListener('mousemove', updateMouse);
+window.addEventListener('touchmove', (e) => {
+  updateMouse(e.touches[0]);
+}, { passive: false });
+
+// Click/Tap Logic
+let lastTap = 0;
+const handleTap = (event) => {
+  const now = Date.now();
+  const isDoubleTap = (now - lastTap) < 300;
+  lastTap = now;
+
+  // Update position first
+  const clientX = event.clientX || event.touches[0].clientX;
+  const clientY = event.clientY || event.touches[0].clientY;
+
+  mouse.x = (clientX / window.innerWidth) * 2 - 1;
+  mouse.y = -(clientY / window.innerHeight) * 2 + 1;
+
+  raycaster.setFromCamera(mouse, camera);
+  raycaster.ray.intersectPlane(plane, planeIntersectPoint);
+
+  if (isDoubleTap) {
+    // Large ripple
+    particleSystem.triggerRipple(planeIntersectPoint.x, planeIntersectPoint.y, planeIntersectPoint.z, 5.0);
+  } else {
+    // Small ripple
+    particleSystem.triggerRipple(planeIntersectPoint.x, planeIntersectPoint.y, planeIntersectPoint.z, 1.0);
+  }
+};
+
+window.addEventListener('click', handleTap);
+window.addEventListener('touchstart', handleTap, { passive: false });
 
 // --- Resize ---
 window.addEventListener('resize', () => {
