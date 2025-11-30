@@ -72,19 +72,17 @@ export class ParticleSystem {
         uTime: { value: 0 },
         uSize: { value: this.params.size * window.devicePixelRatio },
         uSpeed: { value: this.params.speed },
-        uMouse: { value: new THREE.Vector3(9999, 9999, 9999) }, // Default far away
-        uRippleCenter: { value: new THREE.Vector3(0, 0, 0) },
-        uRippleTime: { value: 10.0 }, // High value = finished
-        uRippleStrength: { value: 0.0 }
+        uMouse: { value: new THREE.Vector3(9999, 9999, 9999) },
+        uRipples: { value: Array(5).fill().map(() => new THREE.Vector4(0, 0, 0, 0)) }, // x,y,z,strength
+        uRippleTimes: { value: Array(5).fill(100.0) }
       },
       vertexShader: `
         uniform float uTime;
         uniform float uSize;
         uniform float uSpeed;
         uniform vec3 uMouse;
-        uniform vec3 uRippleCenter;
-        uniform float uRippleTime;
-        uniform float uRippleStrength;
+        uniform vec4 uRipples[5];
+        uniform float uRippleTimes[5];
         
         attribute float aScale;
         attribute vec3 aRandomness;
@@ -167,82 +165,77 @@ export class ParticleSystem {
         void main() {
           vec3 newPos = position;
           
-          // 1. Liquid Flow (FBM - Fractal Brownian Motion)
+          // 1. Liquid Flow
           float time = uTime * uSpeed * 0.1;
-          
-          // Layer 1 (Base flow)
           float n1 = snoise(vec3(newPos.xy * 0.08, time));
-          // Layer 2 (Detail)
           float n2 = snoise(vec3(newPos.xy * 0.2, time * 2.0));
-          
           float noiseVal = n1 + n2 * 0.5;
           
           newPos.x += noiseVal * 0.8;
           newPos.y += snoise(vec3(newPos.yx * 0.08, time)) * 0.8;
           newPos.z += snoise(vec3(newPos.xy * 0.1, time + 10.0)) * 0.5;
           
-          // 2. Mouse Gravity (Viscous & Magnetic)
+          // 2. Mouse Gravity
           float mouseDist = distance(newPos, uMouse);
-          // Larger influence radius, smoother falloff
           float influence = 1.0 - smoothstep(0.0, 40.0, mouseDist); 
-          influence = pow(influence, 2.5); // Slightly softer easing
-          
+          influence = pow(influence, 2.5);
           vec3 pullDir = normalize(uMouse - newPos);
-          // Gentle pull, not too aggressive
           newPos += pullDir * influence * 5.0; 
 
-          // 3. Ripple Effect (Refined Wavefront)
-          float rippleDist = distance(newPos, uRippleCenter);
-          
-          float waveSpeed = 15.0; // Slower, heavier liquid
-          float waveFreq = 1.0;   // Lower frequency for wider waves
-          float currentRadius = uRippleTime * waveSpeed;
-          
-          float distFromWave = abs(rippleDist - currentRadius);
-          float waveWidth = 15.0; // Thicker wave packet
-          
-          float ripple = 0.0;
-          
-          if (distFromWave < waveWidth) {
-             float angle = rippleDist * waveFreq - uRippleTime * (waveSpeed * waveFreq);
-             float s = sin(angle);
+          // 3. Multiple Ripples
+          float totalRipple = 0.0;
+          float maxRipple = 0.0;
+
+          for(int i = 0; i < 5; i++) {
+             vec3 center = uRipples[i].xyz;
+             float strength = uRipples[i].w;
+             float rTime = uRippleTimes[i];
+
+             float rippleDist = distance(newPos, center);
              
-             // Smoother windowing
-             float window = 1.0 - smoothstep(0.0, waveWidth, distFromWave);
-             window = smoothstep(0.0, 1.0, window); // Ease in-out window
+             float waveSpeed = 15.0;
+             float waveFreq = 1.0;
+             float currentRadius = rTime * waveSpeed;
              
-             // Slower attenuation for longer lasting ripples
-             float attenuation = 1.0 / (1.0 + rippleDist * 0.02);
-             attenuation *= exp(-uRippleTime * 0.8);
+             float distFromWave = abs(rippleDist - currentRadius);
+             float waveWidth = 15.0;
              
-             ripple = s * window * attenuation * uRippleStrength * 10.0;
+             if (distFromWave < waveWidth) {
+                float angle = rippleDist * waveFreq - rTime * (waveSpeed * waveFreq);
+                float s = sin(angle);
+                
+                float window = 1.0 - smoothstep(0.0, waveWidth, distFromWave);
+                window = smoothstep(0.0, 1.0, window);
+                
+                float attenuation = 1.0 / (1.0 + rippleDist * 0.02);
+                attenuation *= exp(-rTime * 0.8);
+                
+                float rVal = s * window * attenuation * strength * 10.0;
+                totalRipple += rVal;
+                maxRipple = max(maxRipple, abs(rVal));
+             }
           }
           
-          newPos.z += ripple;
+          newPos.z += totalRipple;
           
           vec4 mvPosition = modelViewMatrix * vec4(newPos, 1.0);
           gl_Position = projectionMatrix * mvPosition;
           
-          // Size attenuation
           gl_PointSize = uSize * aScale * (150.0 / -mvPosition.z);
           
-          // Color Logic
           vColor = color;
           
-          // Depth darkening (fake occlusion)
           float depth = smoothstep(-20.0, 20.0, newPos.z);
           vColor *= (0.5 + 0.5 * depth);
           
-          // Highlight peaks
-          vColor += vec3(max(0.0, ripple * 0.15));
-          vColor += vec3(influence * 0.2); // Slight glow near mouse
+          vColor += vec3(maxRipple * 0.15);
+          vColor += vec3(influence * 0.2);
         }
       `,
       fragmentShader: `
         varying vec3 vColor;
         
         void main() {
-          // Circular particle
           float strength = distance(gl_PointCoord, vec2(0.5));
           strength = 1.0 - strength;
           strength = pow(strength, 3.0);
@@ -255,13 +248,17 @@ export class ParticleSystem {
 
     this.points = new THREE.Points(this.geometry, this.material);
     this.scene.add(this.points);
+
+    this.currentRippleIndex = 0;
   }
 
   update(deltaTime, elapsedTime) {
     if (this.material) {
       this.material.uniforms.uTime.value = elapsedTime;
-      // Increment ripple time
-      this.material.uniforms.uRippleTime.value += deltaTime;
+      // Increment all ripple times
+      for (let i = 0; i < 5; i++) {
+        this.material.uniforms.uRippleTimes.value[i] += deltaTime;
+      }
     }
   }
 
@@ -273,9 +270,11 @@ export class ParticleSystem {
 
   triggerRipple(x, y, z, strength) {
     if (this.material) {
-      this.material.uniforms.uRippleCenter.value.set(x, y, z);
-      this.material.uniforms.uRippleTime.value = 0.0;
-      this.material.uniforms.uRippleStrength.value = strength;
+      const idx = this.currentRippleIndex;
+      this.material.uniforms.uRipples.value[idx].set(x, y, z, strength);
+      this.material.uniforms.uRippleTimes.value[idx] = 0.0;
+
+      this.currentRippleIndex = (this.currentRippleIndex + 1) % 5;
     }
   }
 
