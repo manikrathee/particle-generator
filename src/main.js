@@ -92,7 +92,7 @@ const stopExport = () => {
 };
 
 // --- UI ---
-setupUI(particleSystem, startExport);
+setupUI(particleSystem, startExport, bloomPass);
 
 // --- Interaction ---
 const raycaster = new THREE.Raycaster();

@@ -1,6 +1,6 @@
 import GUI from 'lil-gui';
 
-export function setupUI(particleSystem, onExportVideo) {
+export function setupUI(particleSystem, onExportVideo, bloomPass) {
     const gui = new GUI({ title: 'Particle Generator' });
 
     // Particles Folder
@@ -29,6 +29,14 @@ export function setupUI(particleSystem, onExportVideo) {
     particleFolder.add(particleSystem.params, 'randomness', 0, 2, 0.01)
         .name('Randomness')
         .onChange(v => particleSystem.updateParams('randomness', v));
+
+    // Post Processing Folder
+    if (bloomPass) {
+        const bloomFolder = gui.addFolder('Post Processing');
+        bloomFolder.add(bloomPass, 'strength', 0, 3, 0.01).name('Bloom Strength');
+        bloomFolder.add(bloomPass, 'radius', 0, 1, 0.01).name('Bloom Radius');
+        bloomFolder.add(bloomPass, 'threshold', 0, 1, 0.01).name('Bloom Threshold');
+    }
 
     // Export Folder
     const exportFolder = gui.addFolder('Export');
