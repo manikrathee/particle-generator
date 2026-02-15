@@ -1,68 +1,62 @@
-export function setupUI(particleSystem, onExportVideo) {
-    const container = document.createElement('div');
-    container.id = 'ui-container';
+import GUI from 'lil-gui';
 
-    const title = document.createElement('h3');
-    title.textContent = 'Particle Generator';
-    title.style.margin = '0 0 20px 0';
-    title.style.fontSize = '14px';
-    title.style.fontWeight = '600';
-    title.style.letterSpacing = '0.02em';
-    title.style.color = '#fff';
-    container.appendChild(title);
+export function setupUI(particleSystem, onExportVideo, bloomPass) {
+    const gui = new GUI({ title: 'Particle Generator' });
 
-    const createControl = (label, type, key, min, max, step, value) => {
-        const group = document.createElement('div');
-        group.className = 'control-group';
+    // Particles Folder
+    const particleFolder = gui.addFolder('Particles');
 
-        const labelEl = document.createElement('label');
-        labelEl.textContent = label;
+    particleFolder.add(particleSystem.params, 'count', 100, 50000, 100)
+        .name('Count')
+        .onChange(v => particleSystem.updateParams('count', v));
 
-        const input = document.createElement('input');
-        input.type = type;
-        if (type === 'range') {
-            input.min = min;
-            input.max = max;
-            input.step = step;
+    particleFolder.add(particleSystem.params, 'size', 0.1, 5, 0.1)
+        .name('Size')
+        .onChange(v => particleSystem.updateParams('size', v));
+
+    particleFolder.add(particleSystem.params, 'speed', 0, 5, 0.1)
+        .name('Speed')
+        .onChange(v => particleSystem.updateParams('speed', v));
+
+    particleFolder.add(particleSystem.params, 'radius', 1, 50, 1)
+        .name('Radius')
+        .onChange(v => particleSystem.updateParams('radius', v));
+
+    particleFolder.addColor(particleSystem.params, 'color')
+        .name('Color')
+        .onChange(v => particleSystem.updateParams('color', v));
+
+    particleFolder.add(particleSystem.params, 'randomness', 0, 2, 0.01)
+        .name('Randomness')
+        .onChange(v => particleSystem.updateParams('randomness', v));
+
+    // Post Processing Folder
+    if (bloomPass) {
+        const bloomFolder = gui.addFolder('Post Processing');
+        bloomFolder.add(bloomPass, 'strength', 0, 3, 0.01).name('Bloom Strength');
+        bloomFolder.add(bloomPass, 'radius', 0, 1, 0.01).name('Bloom Radius');
+        bloomFolder.add(bloomPass, 'threshold', 0, 1, 0.01).name('Bloom Threshold');
+    }
+
+    // Export Folder
+    const exportFolder = gui.addFolder('Export');
+
+    const exportParams = {
+        exportVideo: onExportVideo,
+        exportConfig: () => {
+            const data = JSON.stringify(particleSystem.params, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'particle-config.json';
+            a.click();
+            URL.revokeObjectURL(url);
         }
-        input.value = value;
-
-        input.addEventListener('input', (e) => {
-            let val = e.target.value;
-            if (type === 'range') val = parseFloat(val);
-            particleSystem.updateParams(key, val);
-        });
-
-        group.appendChild(labelEl);
-        group.appendChild(input);
-        return group;
     };
 
-    container.appendChild(createControl('Particle Count', 'range', 'count', 100, 50000, 100, particleSystem.params.count));
-    container.appendChild(createControl('Size', 'range', 'size', 0.1, 5, 0.1, particleSystem.params.size));
-    container.appendChild(createControl('Speed', 'range', 'speed', 0, 5, 0.1, particleSystem.params.speed));
-    container.appendChild(createControl('Radius', 'range', 'radius', 1, 50, 1, particleSystem.params.radius));
-    container.appendChild(createControl('Color', 'color', 'color', null, null, null, particleSystem.params.color));
+    exportFolder.add(exportParams, 'exportVideo').name('Export Video (.webm)');
+    exportFolder.add(exportParams, 'exportConfig').name('Export Config (JSON)');
 
-    const exportBtn = document.createElement('button');
-    exportBtn.textContent = 'Export Video (.webm)';
-    exportBtn.onclick = onExportVideo;
-    container.appendChild(exportBtn);
-
-    const exportConfigBtn = document.createElement('button');
-    exportConfigBtn.textContent = 'Export Config (JSON)';
-    exportConfigBtn.className = 'secondary';
-    exportConfigBtn.onclick = () => {
-        const data = JSON.stringify(particleSystem.params, null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'particle-config.json';
-        a.click();
-        URL.revokeObjectURL(url);
-    };
-    container.appendChild(exportConfigBtn);
-
-    document.body.appendChild(container);
+    return gui;
 }
