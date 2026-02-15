@@ -30,6 +30,10 @@ export function setupUI(particleSystem, onExportVideo, bloomPass) {
         .name('Randomness')
         .onChange(v => particleSystem.updateParams('randomness', v));
 
+    particleFolder.add(particleSystem.params, 'shape', { Circle: 0, Square: 1, Ring: 2 })
+        .name('Shape')
+        .onChange(v => particleSystem.updateParams('shape', v));
+
     // Post Processing Folder
     if (bloomPass) {
         const bloomFolder = gui.addFolder('Post Processing');

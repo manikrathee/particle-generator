@@ -14,7 +14,8 @@ export class ParticleSystem {
       color: '#4fc3f7', // Cyan/Blue glow
       speed: 0.5, // Slower, smoother motion
       radius: 15,
-      randomness: 0.5
+      randomness: 0.5,
+      shape: 0 // 0: Circle, 1: Square, 2: Ring
     };
 
     this.init();
@@ -74,7 +75,8 @@ export class ParticleSystem {
         uSpeed: { value: this.params.speed },
         uMouse: { value: new THREE.Vector3(9999, 9999, 9999) },
         uRipples: { value: Array(5).fill().map(() => new THREE.Vector4(0, 0, 0, 0)) }, // x,y,z,strength
-        uRippleTimes: { value: Array(5).fill(100.0) }
+        uRippleTimes: { value: Array(5).fill(100.0) },
+        uShape: { value: this.params.shape }
       },
       vertexShader: `
         uniform float uTime;
@@ -234,11 +236,25 @@ export class ParticleSystem {
       `,
       fragmentShader: `
         varying vec3 vColor;
+        uniform float uShape;
         
         void main() {
-          float strength = distance(gl_PointCoord, vec2(0.5));
-          strength = 1.0 - strength;
-          strength = pow(strength, 3.0);
+          vec2 coord = gl_PointCoord - vec2(0.5);
+          float strength = 0.0;
+          
+          if (uShape < 0.5) { // Circle
+             strength = 1.0 - length(coord) * 2.0;
+             strength = pow(max(0.0, strength), 3.0);
+          } else if (uShape < 1.5) { // Square
+             strength = 1.0 - max(abs(coord.x), abs(coord.y)) * 2.0;
+             strength = pow(max(0.0, strength), 3.0);
+          } else { // Ring
+             float dist = length(coord) * 2.0;
+             strength = 1.0 - abs(dist - 0.7) * 5.0;
+             strength = max(0.0, strength);
+          }
+          
+          if (strength < 0.01) discard;
           
           vec3 finalColor = mix(vec3(0.0), vColor, strength);
           gl_FragColor = vec4(finalColor, 1.0);
@@ -290,6 +306,9 @@ export class ParticleSystem {
     }
     if (key === 'speed' && this.material) {
       this.material.uniforms.uSpeed.value = value;
+    }
+    if (key === 'shape' && this.material) {
+      this.material.uniforms.uShape.value = value;
     }
     // For other params that require geometry rebuild
     if (['count', 'radius', 'color'].includes(key)) {
